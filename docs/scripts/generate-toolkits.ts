@@ -111,6 +111,10 @@ const rawToolkitSchema = z.object({
   triggerCount: z.number().optional().catch(undefined),
 });
 
+const rawToolkitDetailSchema = rawToolkitSchema.extend({
+  auth_config_details: z.array(z.unknown()).catch([]),
+});
+
 const categoryEntrySchema = z.union([
   z.string(),
   z.object({ name: z.string() }).transform(entry => entry.name),
@@ -185,10 +189,6 @@ const rawAuthConfigDetailSchema = z.object({
   mode: z.string().catch(''),
   name: z.string().optional().catch(undefined),
 });
-
-const authConfigDetailsResponseSchema = z
-  .object({ auth_config_details: z.array(z.unknown()).catch([]) })
-  .catch({ auth_config_details: [] });
 
 // The backend silently caps `limit` at 1000 per page and defaults to usage
 // ordering, so a single request returns only the top-1000 toolkits — about half
@@ -329,7 +329,7 @@ export function transformAuthConfigDetail(value: unknown): AuthConfigDetail | nu
   };
 }
 
-async function fetchAuthConfigDetails(slug: string): Promise<AuthConfigDetail[]> {
+async function fetchToolkitDetails(slug: string): Promise<unknown | null> {
   const response = await fetchWithRetry(`${API_BASE}/toolkits/${slug}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -337,14 +337,24 @@ async function fetchAuthConfigDetails(slug: string): Promise<AuthConfigDetail[]>
     },
   });
 
-  if (!response.ok) return [];
+  if (!response.ok) return null;
 
-  const data = authConfigDetailsResponseSchema.parse(await response.json());
+  return await response.json();
+}
 
-  return data.auth_config_details.flatMap(item => {
-    const detail = transformAuthConfigDetail(item);
-    return detail ? [detail] : [];
+export function applyToolkitDetails(toolkit: Toolkit, value: unknown): Toolkit {
+  const detail = rawToolkitDetailSchema.parse(value);
+  const description = detail.meta.description || detail.description;
+  const authConfigDetails = detail.auth_config_details.flatMap(item => {
+    const authConfigDetail = transformAuthConfigDetail(item);
+    return authConfigDetail ? [authConfigDetail] : [];
   });
+
+  return {
+    ...toolkit,
+    ...(description ? { description } : {}),
+    ...(authConfigDetails.length > 0 ? { authConfigDetails } : {}),
+  };
 }
 
 export function transformToolkit(raw: unknown): Toolkit {
@@ -409,17 +419,17 @@ async function main() {
 
     await Promise.all(
       batch.map(async toolkit => {
-        const [tools, triggers, authConfigDetails] = await Promise.all([
+        const [tools, triggers, rawDetails] = await Promise.all([
           fetchToolsForToolkit(toolkit.slug.toUpperCase()),
           fetchTriggersForToolkit(toolkit.slug.toUpperCase()),
-          fetchAuthConfigDetails(toolkit.slug),
+          fetchToolkitDetails(toolkit.slug),
         ]);
 
+        if (rawDetails) Object.assign(toolkit, applyToolkitDetails(toolkit, rawDetails));
         toolkit.tools = tools;
         toolkit.triggers = triggers;
         toolkit.toolCount = tools.length;
         toolkit.triggerCount = triggers.length;
-        toolkit.authConfigDetails = authConfigDetails.length > 0 ? authConfigDetails : undefined;
 
         completed++;
         process.stdout.write(`\r  Progress: ${completed}/${toolkits.length}`);

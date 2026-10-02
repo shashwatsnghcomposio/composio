@@ -252946,7 +252946,7 @@
     "slug": "linkly",
     "name": "Linkly",
     "logo": "https://logos.composio.dev/api/linkly",
-    "description": "Easily create tracking links, add retargeting tags, do smart redirects and more.",
+    "description": "Linkly is a URL shortener and click-tracking platform for branded short links, UTM tagging, retargeting pixels, link rotators, QR codes, and click analytics. To create an API key, sign in to Linkly at linklyhq.com and go to Settings → API Keys.",
     "category": "url shortener",
     "authSchemes": [
       "API_KEY"

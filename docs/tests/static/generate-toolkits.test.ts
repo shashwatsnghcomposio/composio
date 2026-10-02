@@ -16,6 +16,7 @@
 import { describe, test, expect } from "bun:test";
 import {
   authConfigFields,
+  applyToolkitDetails,
   parseNamedItems,
   parseToolkitsPage,
   shouldPublishToolkit,
@@ -111,6 +112,23 @@ describe("transformToolkit", () => {
 
     expect(toolkit.logo).toBe("https://logo.example/github.png");
     expect(toolkit.description).toBe("root description");
+  });
+
+  test("prefers the canonical detail response description over stale list metadata", () => {
+    const toolkit = transformToolkit({
+      slug: "linkly",
+      description: "stale list description",
+    });
+
+    const updated = applyToolkitDetails(toolkit, {
+      slug: "linkly",
+      meta: {
+        description: "current detail description",
+        categories: [],
+      },
+    });
+
+    expect(updated.description).toBe("current detail description");
   });
 
   test("non-string tool_count/trigger_count are dropped in favor of the numeric fallback", () => {
